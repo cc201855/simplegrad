@@ -1,6 +1,7 @@
-from typing import Union, Tuple, Any
+import importlib
+import inspect
+from typing import Union, Tuple
 from numbers import Number
-
 import numpy as np
 
 # 指定Tensor数据类型为float32
@@ -212,150 +213,44 @@ class Tensor:
                     gt = Tensor(g)
                     t._grad = gt if t.grad is None else t.grad + gt
 
-    def __add__(self, other):
-        ctx = Add(self, ensure_tensor(other))
-        return ctx.apply(ctx, self, ensure_tensor(other))
 
-    def __mul__(self, other):
-        ctx = Mul(self, ensure_tensor(other))
-        return ctx.apply(ctx, self, ensure_tensor(other))
-
-
-class _Function:
-    def __init__(self, *tensors: "Tensor") -> None:
-        """
-        :param tensors:该操作所依赖的所有输入
-        """
-        self.depends_on = [t for t in tensors]
-        # 保存需要在backward()中使用的Tensor或其他信息（如shape）
-        self.saved_tensors = []
-
-    def save_for_backward(ctx, *x: Any) -> None:
-        """
-        :param x:待保存Tensor
-        """
-        ctx.saved_tensors.extend(x)
-
-    def __new__(cls, *args, **kwargs):
-        """
-        ___new___为静态方法，当该类被实例化时调用
-        """
-        # 将forward和backward转换为静态方法，可以通过类名直接调用
-        cls.forward = staticmethod(cls.forward)
-        cls.backward = staticmethod(cls.backward)
-        return super().__new__(cls)
-
-    def forward(ctx, *args: Any, **kwargs: Any) -> np.ndarray:
-        """
-        进行前向传播，真正运算的地方
-        :return: 返回运算结果
-        """
-        return NotImplemented("You must implement the forward function for custom Function.")
-
-    def backward(ctx, grad: np.ndarray) -> Any:
-        """
-        实现反向传播，计算梯度
-        :param grad:前一个运算梯度
-        :return:返回计算后的梯度
-        """
-        return NotImplemented("You must implement the backward method for your custom Function" +
-                              "to use it with backward mode AD.")
-
-    def apply(self, ctx, *xs: "Tensor", **kwargs) -> "Tensor":
-        """
-        与PyTorch相同，我们也不直接调用forward，而是调用此方法
-        :param ctx:
-        :param xs:
-        :param kwargs:
-        :return:
-        """
-        # [t.data for t in xs] 遍历xs中的所有tensor，并取出data(np.ndarray)
-        # 即实际参与运算的都是ndarray数组
-        ret = Tensor(ctx.forward(ctx, *[t.data for t in xs], **kwargs),
-                     requires_grad=any([t.requires_grad for t in xs]))
-
-        if ret.requires_grad:
-            # 如果需要求梯度，那么保存上下文信息
-            ret._ctx = ctx
-
-        return ret
-
-
-def unbroadcast(grad: np.ndarray, in_shape: Tuple) -> np.ndarray:
+# 采用自动注入来实现相应的魔法方法。
+def register(name, fxn):
     """
-    广播操作的逆操作，确保grad转换成in_shape的形状
-    :param grad:梯度
-    :param in_shape:梯度要转换的形状
-    :return:转换后的梯度
+    将name中的所有函数都进注入进tensor中
+    :param name:函数名
+    :param fxn:
+    :return:
     """
-    # 首先计算维度个数之差
-    ndims_added = grad.ndim - len(in_shape)
-    # 由于广播时，先从左边插入，再进行复制，所以逆操作时，也从左边开始，进行复制的逆操作（求和）
-    for _ in range(ndims_added):
-        # 在axis=0上进行求和，去掉第0个维度，如果ndims_added > 1，就需要不停的在第0个维度上面求和
-        grad = np.sum(grad, axis=0)
 
-    # 处理 (2,3) + (1,3) => (2,3) grad的情况
-    # 看in_shape中有没有维度=1的情况
-    for i, dim in enumerate(in_shape):
-        if dim == 1:
-            # 那么需要在该axis上求和，并且保持维度 这里(2,3) => (1,3) grad 就和输入维度保持一致了
-            grad = np.sum(grad, axis=i, keepdims=True)
-    return grad
+    def dispatch(*xs, **kwargs):
+        # 把所有的输入都转换为Tensor
+        xs = [ensure_tensor(x) for x in xs]
+        # 调用apply方法
+        return fxn.apply(fxn, *xs, **kwargs)
 
+    if name in ['pow', 'neg']:
+        setattr(Tensor, f'__{name}__', dispatch)
+    # 为Tensor添加属性，名为name，值为dispatch函数引用
+    setattr(Tensor, name, dispatch)
 
-# **********二元运算**********
-class Add(_Function):
-    def forward(ctx, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-        """
-        实现 z = x+y,这里的x，y都是numpy数组，因此可能发生广播操作
-        反向传播时需要注意
-        :param x: tensorA
-        :param y: tensorB
-        :return: A+B
-        """
-        # 只需要保存输入各自的形状即可
-        ctx.save_for_backward(x.shape, y.shape)
-        # 进行真正运算
-        return x + y
-
-    def backward(ctx, grad: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        z = x+y
-        输入有两个，因此需要计算的梯度也是两个，因此输出也是两个
-        ∂l/∂x = (∂l/∂z) * (∂z/∂x) = ∂l/∂z = grad
-        ∂l/∂y = (∂l/∂z) * (∂z/∂y) = ∂l/∂z = grad
-        :param grad: 上层节点的梯度
-        :return:加法算子计算出的梯度
-        """
-        shape_x, shape_y = ctx.saved_tensors
-        # 如有广播，进行还原
-        return unbroadcast(grad, shape_x), unbroadcast(grad, shape_y)
+    # 这几个方法都有__xx__, __ixx__, __rxx__ 魔法方法
+    # 比如对于add，这段代码会把__add__、__iadd__、__radd__和add绑定到其内部的dispatch方法。
+    if name in ["add", "sub", "mul", "truediv", "matmul"]:
+        setattr(Tensor, f"__{name}__", dispatch)
+        # __i*__ 代表原地操作，即 tensor += x
+        setattr(Tensor, f"__i{name}__", lambda self, x: self.assign(dispatch(self, x)))
+        # __r*__ 代表 other在操作符前, self在操作符后，即 x + tensor
+        setattr(Tensor, f"__r{name}__", lambda self, x: dispatch(x, self))
 
 
-class Mul(_Function):
-    def forward(ctx, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-        """
-        实现 z = x*y,这里的x，y都是numpy数组，因此可能发生广播操作
-        反向传播时需要注意
-        :param x: tensorA
-        :param y: tensorB
-        :return: A*B
-        """
-        # 求梯度时需要x, y，因此进行保存操作
-        ctx.save_for_backward(x, y)
-        # 进行真正运算
-        return x * y
+def _register_ops(namespace):
+    for name, cls in inspect.getmembers(namespace, inspect.isclass):
+        if name[0] != "_" and name != 'Tensor':
+            # 注册所有_Function的子类
+            register(name.lower(), cls)
 
-    def backward(ctx, grad: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        z = x*y
-        输入有两个，因此需要计算的梯度也是两个，因此输出也是两个
-        ∂l/∂x = (∂l/∂z) * (∂z/∂x) = ∂l/∂z * y = grad * y
-        ∂l/∂y = (∂l/∂z) * (∂z/∂y) = ∂l/∂z * x = grad * x
-        :param grad: 上层节点的梯度
-        :return:乘法算子计算出的梯度
-        """
-        x, y = ctx.saved_tensors
-        # 如有广播，进行还原
-        return unbroadcast(grad * y, x.shape), unbroadcast(grad * x, y.shape)
+try:
+    _register_ops(importlib.import_module("core.ops"))
+except ImportError as e:
+    print(e)
