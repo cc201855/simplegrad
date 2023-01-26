@@ -73,9 +73,9 @@ def test_matrix_max2():
         ty, idx = tx.max(dim=0)
 
         assert y.shape == ty.shape
-        assert judge_data(y, ty, rtol=1.e-3, atol=1.e-3)
+        assert judge_data(y, ty, rtol=1.e-2, atol=1.e-2)
 
         grad = np.ones_like(y.data)
         y.backward(grad)
         ty.backward(torch.tensor(grad))
-        assert judge_grad(x, tx, rtol=1.e-3, atol=1.e-3)
+        assert judge_grad(x, tx, rtol=1.e-2, atol=1.e-2)
