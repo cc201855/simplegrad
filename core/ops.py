@@ -91,6 +91,29 @@ def unbroadcast(grad: ndarray, in_shape: Tuple) -> ndarray:
     return grad
 
 
+# **********一元运算**********
+class Log(_Function):
+    def forward(ctx, x: ndarray) -> ndarray:
+        """
+        实现 z = log_e(x)
+        :param x: tensorA
+        :return: log(x)
+        """
+        # 进行真正运算
+        ctx.save_for_backward(x)
+        return np.log(x)
+
+    def backward(ctx, grad: ndarray) -> ndarray:
+        """
+        z = log_e(x)
+        ∂l/∂x = (∂l/∂z) * (∂z/∂x) = ∂l/∂z / x = grad / x
+        :param grad: 上层节点的梯度
+        :return:Log算子计算出的梯度
+        """
+        x = ctx.saved_tensors[0]
+        return grad / x
+
+
 class Pow(_Function):
     def forward(ctx, x: ndarray, c: int) -> ndarray:
         """
@@ -115,27 +138,27 @@ class Pow(_Function):
         return grad * c * np.power(x, c - 1), None
 
 
-# **********一元运算**********
-class Log(_Function):
+class Exp(_Function):
     def forward(ctx, x: ndarray) -> ndarray:
         """
-        实现 z = log_e(x)
+        实现 z = e^x
         :param x: tensorA
-        :return: log(x)
+        :return: e^x
         """
         # 进行真正运算
         ctx.save_for_backward(x)
-        return np.log(x)
+        return np.exp(x)
 
     def backward(ctx, grad: ndarray) -> ndarray:
         """
-        z = log_e(x)
-        ∂l/∂x = (∂l/∂z) * (∂z/∂x) = ∂l/∂z / x = grad / x
+        z = e^x
+        ∂l/∂x = (∂l/∂z) * (∂z/∂x) = ∂l/∂z * e^x = grad * e^x
         :param grad: 上层节点的梯度
-        :return:Log算子计算出的梯度
+        :return:Exp算子计算出的梯度
         """
         x = ctx.saved_tensors[0]
-        return grad / x
+        # 把c当成一个常量，不需要计算梯度
+        return grad * np.exp(x)
 
 
 # **********二元运算**********
