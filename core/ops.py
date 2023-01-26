@@ -174,3 +174,31 @@ class Mul(_Function):
         x, y = ctx.saved_tensors
         # 如有广播，进行还原
         return unbroadcast(grad * y, x.shape), unbroadcast(grad * x, y.shape)
+
+# __truediv__ 相关魔法方法实现了/，因此名字设置为这样方便注入
+class TrueDiv(_Function):
+    def forward(ctx, x: ndarray, y: ndarray) -> ndarray:
+        """
+        实现 z = x/y,这里的x，y都是numpy数组，因此可能发生广播操作
+        反向传播时需要注意
+        :param x: tensorA
+        :param y: tensorB
+        :return: A/B
+        """
+        # 求梯度时需要x, y，因此进行保存操作
+        ctx.save_for_backward(x, y)
+        # 进行真正运算
+        return x / y
+
+    def backward(ctx, grad: ndarray) -> Tuple[ndarray, ndarray]:
+        """
+        z = x/y
+        输入有两个，因此需要计算的梯度也是两个，因此输出也是两个
+        ∂l/∂x = (∂l/∂z) * (∂z/∂x) = ∂l/∂z / y = grad / y
+        ∂l/∂y = (∂l/∂z) * (∂z/∂y) = ∂l/∂z * (-x/y^2) = grad * (-x/y^2)
+        :param grad: 上层节点的梯度
+        :return:除法算子计算出的梯度
+        """
+        x, y = ctx.saved_tensors
+        # 如有广播，进行还原
+        return unbroadcast(grad / y, x.shape), unbroadcast(grad * (-x / np.power(y, 2)), y.shape)
