@@ -323,3 +323,29 @@ class Matmul(_Function):
         # 如有广播，进行还原
         return unbroadcast(np.matmul(grad, y.swapaxes(-2, -1)), x.shape), unbroadcast(
             np.matmul(x.swapaxes(-2, -1), grad), y.shape)
+
+# **********聚合运算**********
+class Sum(_Function):
+    def forward(ctx, x: ndarray, axis: [int, list] = None, keepdims: bool = False) -> ndarray:
+        """
+        实现 x.sum()
+        :param x: tensorA
+        :param axis: tensorB
+        :param keepdims: tensorB
+        :return: x求和结果
+        """
+        # 只需要保存输入各自的形状即可
+        ctx.save_for_backward(x.shape)
+        # 进行真正运算
+        return np.sum(x, axis=axis, keepdims=keepdims)
+
+    def backward(ctx, grad: ndarray) -> ndarray:
+        """
+        x.sum()的梯度为还原成之前形状，并且梯度保持不变
+        :param grad: 上层节点的梯度
+        :return:求和算子计算出的梯度
+        """
+        # 由于saved_tensors是列表，而我们只需要前向运算中x的维度即第一个元素
+        shape_x = ctx.saved_tensors[0]
+        # 如有广播，进行还原
+        return np.broadcast_to(grad, shape_x)
