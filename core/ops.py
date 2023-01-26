@@ -202,3 +202,32 @@ class TrueDiv(_Function):
         x, y = ctx.saved_tensors
         # 如有广播，进行还原
         return unbroadcast(grad / y, x.shape), unbroadcast(grad * (-x / np.power(y, 2)), y.shape)
+
+# **********矩阵运算**********
+class Matmul(_Function):
+    def forward(ctx, x: ndarray, y: ndarray) -> ndarray:
+        """
+        实现 z = X@Y, 这里的x，y都是numpy数组
+        :param x: tensorA
+        :param y: tensorB
+        :return: A @ B
+        """
+        assert x.ndim > 1 and y.ndim > 1, f"the dim number of x or y must >= 2, actual x:{x.ndim}, y:{y.ndim}"
+        # 求梯度时需要x, y，因此进行保存操作
+        ctx.save_for_backward(x, y)
+        # 进行真正运算
+        return np.matmul(x, y)
+
+    def backward(ctx, grad: ndarray) -> Tuple[ndarray, ndarray]:
+        """
+        z = x@y
+        输入有两个，因此需要计算的梯度也是两个，因此输出也是两个
+        ∂l/∂x = (∂l/∂z) * (∂z/∂x) = ∂l/∂z @ yT = grad @ y^T
+        ∂l/∂y = (∂l/∂z) * (∂z/∂y) = xT @ ∂l/∂z = xT @ grad
+        :param grad: 上层节点的梯度
+        :return:矩阵乘法算子计算出的梯度
+        """
+        x, y = ctx.saved_tensors
+        # 如有广播，进行还原
+        return unbroadcast(np.matmul(grad, y.swapaxes(-2, -1)), x.shape), unbroadcast(
+            np.matmul(x.swapaxes(-2, -1), grad), y.shape)
