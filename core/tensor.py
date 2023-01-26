@@ -128,8 +128,12 @@ class Tensor:
     def __len__(self):
         return len(self._data)
 
-    def __getitem__(self, idxs):
+    def __getitem__(self, idxs) -> "Tensor":
         return self.slice(idxs)
+
+    @property
+    def T(self) -> "Tensor":
+        return self.transpose(axes=None)
 
     def assign(self, value) -> "Tensor":
         """

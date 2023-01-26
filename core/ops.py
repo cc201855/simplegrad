@@ -431,3 +431,27 @@ class Reshape(_Function):
         """
         x_shape = ctx.saved_tensors[0]
         return grad.reshape(x_shape), None
+
+
+# **********变形**********
+class Transpose(_Function):
+    def forward(ctx, x: ndarray, axes: Tuple) -> ndarray:
+        """
+        实现Tensor转置或交换轴
+        :param x: tensorA
+        :param axes: 变形后形状
+        :return: 形状后Tensor
+        """
+        ctx.save_for_backward(axes)
+        return np.transpose(x, axes=axes)
+
+    def backward(ctx, grad: ndarray) -> Tuple[ndarray, None]:
+        """
+        恢复原形状即可
+        :param grad: 上层节点的梯度
+        :return:reshape算子计算出的梯度
+        """
+        axes = ctx.saved_tensors[0]
+        if axes is None:
+            return np.transpose(grad)
+        return np.transpose(grad, axes=tuple(np.argsort(axes))), None
