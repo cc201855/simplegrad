@@ -398,7 +398,7 @@ class Slice(_Function):
         ctx.save_for_backward(x.shape, idxs)
         return x[idxs]
 
-    def backward(ctx, grad: ndarray) -> ndarray:
+    def backward(ctx, grad: ndarray) -> Tuple[ndarray, None]:
         """
         只有索引保留下来的值有梯度，其他都为零
         :param grad: 上层节点的梯度
@@ -409,3 +409,25 @@ class Slice(_Function):
         bigger_grad[idxs] = grad
 
         return bigger_grad, None
+
+
+# **********变形**********
+class Reshape(_Function):
+    def forward(ctx, x: ndarray, shape: Tuple) -> ndarray:
+        """
+        实现Tensor变形
+        :param x: tensorA
+        :param shape: 变形后形状
+        :return: 形状后Tensor
+        """
+        ctx.save_for_backward(x.shape)
+        return x.reshape(shape)
+
+    def backward(ctx, grad: ndarray) -> Tuple[ndarray, None]:
+        """
+        恢复原形状即可
+        :param grad: 上层节点的梯度
+        :return:reshape算子计算出的梯度
+        """
+        x_shape = ctx.saved_tensors[0]
+        return grad.reshape(x_shape), None
