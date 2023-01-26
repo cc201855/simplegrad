@@ -92,7 +92,6 @@ def unbroadcast(grad: ndarray, in_shape: Tuple) -> ndarray:
 
 
 # **********二元运算**********
-# **********二元运算**********
 class Add(_Function):
     def forward(ctx, x: ndarray, y: ndarray) -> ndarray:
         """
@@ -119,6 +118,34 @@ class Add(_Function):
         shape_x, shape_y = ctx.saved_tensors
         # 如有广播，进行还原
         return unbroadcast(grad, shape_x), unbroadcast(grad, shape_y)
+
+
+class Sub(_Function):
+    def forward(ctx, x: ndarray, y: ndarray) -> ndarray:
+        """
+        实现 z = x-y,这里的x，y都是numpy数组，因此可能发生广播操作
+        反向传播时需要注意
+        :param x: tensorA
+        :param y: tensorB
+        :return: A-B
+        """
+        # 只需要保存输入各自的形状即可
+        ctx.save_for_backward(x.shape, y.shape)
+        # 进行真正运算
+        return x - y
+
+    def backward(ctx, grad: ndarray) -> Tuple[ndarray, ndarray]:
+        """
+        输入有两个，因此需要计算的梯度也是两个，因此输出也是两个
+        z = x-y
+        ∂l/∂x = (∂l/∂z) * (∂z/∂x) = ∂l/∂z  = grad
+        ∂l/∂y = (∂l/∂z) * (∂z/∂y) = ∂l/∂z * -1 = grad * -1
+        :param grad: 上层节点的梯度
+        :return:减法算子计算出的梯度
+        """
+        shape_x, shape_y = ctx.saved_tensors
+        # 如有广播，进行还原
+        return unbroadcast(grad, shape_x), unbroadcast(-grad, shape_y)
 
 
 class Mul(_Function):
