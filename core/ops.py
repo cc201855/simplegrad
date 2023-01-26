@@ -91,6 +91,29 @@ def unbroadcast(grad: ndarray, in_shape: Tuple) -> ndarray:
     return grad
 
 
+# **********一元运算**********
+class Log(_Function):
+    def forward(ctx, x: ndarray) -> ndarray:
+        """
+        实现 z = log_e(x)
+        :param x: tensorA
+        :return: log(x)
+        """
+        # 进行真正运算
+        ctx.save_for_backward(x)
+        return np.log(x)
+
+    def backward(ctx, grad: ndarray) -> ndarray:
+        """
+        z = log_e(x)
+        ∂l/∂x = (∂l/∂z) * (∂z/∂x) = ∂l/∂z / x = grad / x
+        :param grad: 上层节点的梯度
+        :return:Log算子计算出的梯度
+        """
+        x = ctx.saved_tensors[0]
+        return grad / x
+
+
 # **********二元运算**********
 class Add(_Function):
     def forward(ctx, x: ndarray, y: ndarray) -> ndarray:
@@ -175,6 +198,7 @@ class Mul(_Function):
         # 如有广播，进行还原
         return unbroadcast(grad * y, x.shape), unbroadcast(grad * x, y.shape)
 
+
 # __truediv__ 相关魔法方法实现了/，因此名字设置为这样方便注入
 class TrueDiv(_Function):
     def forward(ctx, x: ndarray, y: ndarray) -> ndarray:
@@ -202,6 +226,7 @@ class TrueDiv(_Function):
         x, y = ctx.saved_tensors
         # 如有广播，进行还原
         return unbroadcast(grad / y, x.shape), unbroadcast(grad * (-x / np.power(y, 2)), y.shape)
+
 
 # **********矩阵运算**********
 class Matmul(_Function):
