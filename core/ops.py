@@ -91,6 +91,30 @@ def unbroadcast(grad: ndarray, in_shape: Tuple) -> ndarray:
     return grad
 
 
+class Pow(_Function):
+    def forward(ctx, x: ndarray, c: int) -> ndarray:
+        """
+        实现 z = A^c
+        :param x: tensorA
+        :param c: 乘方次数
+        :return: A^c
+        """
+        # 进行真正运算
+        ctx.save_for_backward(x, c)
+        return np.power(x, c)
+
+    def backward(ctx, grad: ndarray) -> Tuple[ndarray, None]:
+        """
+        z = A^c
+        ∂l/∂x = (∂l/∂z) * (∂z/∂x) = ∂l/∂z * c * A^(c-1) = grad * c * A^(c-1)
+        :param grad: 上层节点的梯度
+        :return:Pow算子计算出的梯度
+        """
+        x, c = ctx.saved_tensors
+        # 把c当成一个常量，不需要计算梯度
+        return grad * c * np.power(x, c - 1), None
+
+
 # **********一元运算**********
 class Log(_Function):
     def forward(ctx, x: ndarray) -> ndarray:
