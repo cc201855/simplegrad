@@ -161,6 +161,26 @@ class Exp(_Function):
         return grad * np.exp(x)
 
 
+class Neg(_Function):
+    def forward(ctx, x: ndarray) -> ndarray:
+        """
+        实现 z = -x
+        :param x: tensorA
+        :return: -x
+        """
+        # 进行真正运算
+        return -x
+
+    def backward(ctx, grad: ndarray) -> ndarray:
+        """
+        z = -x
+        ∂l/∂x = (∂l/∂z) * (∂z/∂x) = ∂l/∂z * -1 = -grad
+        :param grad: 上层节点的梯度
+        :return:Neg算子计算出的梯度
+        """
+        return -grad
+
+
 # **********二元运算**********
 class Add(_Function):
     def forward(ctx, x: ndarray, y: ndarray) -> ndarray:
