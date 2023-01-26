@@ -380,3 +380,32 @@ class Max(_Function):
         # 考虑有多个最大值的情况，将梯度分散
         div = np.sum(mask, axis=axis, keepdims=keepdims)
         return mask * grad / div
+
+
+# **********切片&索引**********
+class Slice(_Function):
+    def forward(ctx, x: ndarray, idxs: [int, list]) -> ndarray:
+        """
+        实现Tensor索引操作
+        :param x: tensorA
+        :param idxs: 索引
+        :return: 切片后Tensor
+        """
+        # 如果传入[1:3]，变成切片slice对象
+        if isinstance(idxs, ndarray):
+            # 如果idxs传入单个索引，会被看成是整数，所以这里转换回来
+            idxs = int(idxs.item())
+        ctx.save_for_backward(x.shape, idxs)
+        return x[idxs]
+
+    def backward(ctx, grad: ndarray) -> ndarray:
+        """
+        只有索引保留下来的值有梯度，其他都为零
+        :param grad: 上层节点的梯度
+        :return:切片或索引算子计算出的梯度
+        """
+        x_shape, idxs = ctx.saved_tensors
+        bigger_grad = np.zeros(x_shape, dtype=grad.dtype)
+        bigger_grad[idxs] = grad
+
+        return bigger_grad, None

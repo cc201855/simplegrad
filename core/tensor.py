@@ -16,8 +16,8 @@ def ensure_ndarray(data: ndarrayble) -> np.ndarray:
     :param data:待转换数据
     :return:转换后的ndarray类型数据
     """
-    if isinstance(data, np.ndarray):
-        # 如果本身是ndarray，则直接返回
+    if isinstance(data, (np.ndarray, slice, tuple)):
+        # 如果本身是ndarray、slice、tuple（里面全为slice），则直接返回
         return data
     # 其他情况则转换为Numpy数组
     return np.array(data, dtype=default_type)
@@ -127,6 +127,9 @@ class Tensor:
 
     def __len__(self):
         return len(self._data)
+
+    def __getitem__(self, idxs):
+        return self.slice(idxs)
 
     def assign(self, value) -> "Tensor":
         """
@@ -249,6 +252,7 @@ def _register_ops(namespace):
         if name[0] != "_" and name != 'Tensor':
             # 注册所有_Function的子类
             register(name.lower(), cls)
+
 
 try:
     _register_ops(importlib.import_module("core.ops"))
