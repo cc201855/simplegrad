@@ -324,6 +324,7 @@ class Matmul(_Function):
         return unbroadcast(np.matmul(grad, y.swapaxes(-2, -1)), x.shape), unbroadcast(
             np.matmul(x.swapaxes(-2, -1), grad), y.shape)
 
+
 # **********聚合运算**********
 class Sum(_Function):
     def forward(ctx, x: ndarray, axis: [int, list] = None, keepdims: bool = False) -> ndarray:
@@ -349,3 +350,33 @@ class Sum(_Function):
         shape_x = ctx.saved_tensors[0]
         # 如有广播，进行还原
         return np.broadcast_to(grad, shape_x)
+
+
+class Max(_Function):
+    def forward(ctx, x: ndarray, axis: [int, list] = None, keepdims: bool = False) -> ndarray:
+        """
+        实现 x.max()
+        :param x: tensorA
+        :param axis: tensorB
+        :param keepdims: tensorB
+        :return: x的最大值
+        """
+        # 只需要保存输入各自的形状即可
+        ret = np.max(x, axis=axis, keepdims=keepdims)
+        ctx.save_for_backward(x, axis, keepdims, ret)
+        # 进行真正运算
+        return ret
+
+    def backward(ctx, grad: ndarray) -> ndarray:
+        """
+        x.max()的梯度为还原成之前形状，并且梯度只有最大值才有，并且为1
+        :param grad: 上层节点的梯度
+        :return:求最大值算子计算出的梯度
+        """
+        # 由于saved_tensors是列表，而我们只需要前向运算中x的维度即第一个元素
+        x, axis, keepdims, ret = ctx.saved_tensors
+        # 当和最大值相等时为True，其他全为False
+        mask = x == ret
+        # 考虑有多个最大值的情况，将梯度分散
+        div = np.sum(mask, axis=axis, keepdims=keepdims)
+        return mask * grad / div
